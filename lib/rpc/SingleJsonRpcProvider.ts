@@ -17,10 +17,7 @@ import { Network } from '@ethersproject/networks'
 import { getProviderId } from './utils'
 import { ProviderHealthiness } from './ProviderHealthState'
 
-export const GET_BLOCK_NUMBER_METHOD_NAME = 'getBlockNumber'
-export const CALL_METHOD_NAME = 'call'
-export const SEND_METHOD_NAME = 'send'
-export const MAJOR_METHOD_NAMES: string[] = [GET_BLOCK_NUMBER_METHOD_NAME, CALL_METHOD_NAME, SEND_METHOD_NAME]
+export const MAJOR_METHOD_NAMES: string[] = ['getBlockNumber', 'call', 'send']
 
 export enum CallType {
   NORMAL,
@@ -183,7 +180,7 @@ export class SingleJsonRpcProvider extends StaticJsonRpcProvider {
     this.logEvaluateLatency()
     this.evaluatingLatency = true
     try {
-      return await (this as any)[`${methodName}_EvaluateLatency`](...args)
+      await (this as any)[`${methodName}_EvaluateLatency`](...args)
     } catch (error: any) {
       this.log.error({ error }, `Encounter error for shadow evaluate latency call: ${JSON.stringify(error)}`)
       // Swallow the error.
@@ -242,22 +239,6 @@ export class SingleJsonRpcProvider extends StaticJsonRpcProvider {
 
   logSendMetrod(method: string) {
     metric.putMetric(`${this.metricPrefix}_send_${method}`, 1, MetricLoggerUnit.Count)
-  }
-
-  logRpcResponseMatch(method: string, otherProvider: SingleJsonRpcProvider) {
-    metric.putMetric(
-      `${this.metricPrefix}_other_provider_${otherProvider.providerId}_method_${method}_rpc_match`,
-      1,
-      MetricLoggerUnit.Count
-    )
-  }
-
-  logRpcResponseMismatch(method: string, otherProvider: SingleJsonRpcProvider) {
-    metric.putMetric(
-      `${this.metricPrefix}_other_provider_${otherProvider.providerId}_method_${method}_rpc_mismatch`,
-      1,
-      MetricLoggerUnit.Count
-    )
   }
 
   private async wrappedFunctionCall(

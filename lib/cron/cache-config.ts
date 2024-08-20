@@ -1,26 +1,14 @@
 import { Protocol } from '@uniswap/router-sdk'
-import { V2SubgraphProvider, V3SubgraphProvider, V4SubgraphProvider } from '@uniswap/smart-order-router'
+import { V2SubgraphProvider, V3SubgraphProvider } from '@uniswap/smart-order-router'
 import { ChainId } from '@uniswap/sdk-core'
 
-// during local cdk stack update, the env vars are not populated
-// make sure to fill in the env vars below
-// process.env.ALCHEMY_QUERY_KEY = ''
-
-export const v4SubgraphUrlOverride = (chainId: ChainId) => {
-  switch (chainId) {
-    case ChainId.SEPOLIA:
-      return `https://subgraph.satsuma-prod.com/${process.env.ALCHEMY_QUERY_KEY}/uniswap/uniswap-v4-sepolia-test/api`
-    default:
-      return undefined
-  }
-}
-
-export const v3SubgraphUrlOverride = (chainId: ChainId) => {
+const v3SubgraphUrlOverride = (chainId: ChainId) => {
   switch (chainId) {
     case ChainId.MAINNET:
       return `https://subgraph.satsuma-prod.com/${process.env.ALCHEMY_QUERY_KEY}/uniswap/uniswap-v3-mainnet/api`
     case ChainId.ARBITRUM_ONE:
-      return `https://subgraph.satsuma-prod.com/${process.env.ALCHEMY_QUERY_KEY}/uniswap/uniswap-v3-arbitrum-ii/api`
+      //https://thegraph.com/explorer/subgraphs/FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM?view=Overview&chain=arbitrum-one
+      return `https://gateway-arbitrum.network.thegraph.com/api/${process.env.DCN_API_KEY}/subgraphs/id/FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM`
     case ChainId.POLYGON:
       return `https://subgraph.satsuma-prod.com/${process.env.ALCHEMY_QUERY_KEY}/uniswap/uniswap-v3-polygon/api`
     case ChainId.OPTIMISM:
@@ -40,10 +28,10 @@ export const v3SubgraphUrlOverride = (chainId: ChainId) => {
   }
 }
 
-export const v2SubgraphUrlOverride = (chainId: ChainId) => {
+const v2SubgraphUrlOverride = (chainId: ChainId) => {
   switch (chainId) {
     case ChainId.MAINNET:
-      return `https://subgraph.satsuma-prod.com/${process.env.ALCHEMY_QUERY_KEY}/uniswap/uniswap-v2-mainnet/api`
+      return `https://gateway-arbitrum.network.thegraph.com/api/${process.env.DCN_API_KEY}/subgraphs/id/FEtpnfQ1aqF8um2YktEkfzFD11ZKrfurvBLPeQzv9JB1`
     case ChainId.ARBITRUM_ONE:
       return `https://subgraph.satsuma-prod.com/${process.env.ALCHEMY_QUERY_KEY}/uniswap/uniswap-v2-arbitrum/api`
     case ChainId.POLYGON:
@@ -63,14 +51,10 @@ export const v2SubgraphUrlOverride = (chainId: ChainId) => {
   }
 }
 
-// TODO: ROUTE-225 - follow up on v4 subgraph pools filtering threshold
-const v4TrackedEthThreshold = 0 // Pools need at least 0 of trackedEth to be selected
-const v4UntrackedUsdThreshold = 0 // Pools need at least 0k USD (untracked) to be selected (for metrics only)
-
-export const v3TrackedEthThreshold = 0.01 // Pools need at least 0.01 of trackedEth to be selected
+const v3TrackedEthThreshold = 0.01 // Pools need at least 0.01 of trackedEth to be selected
 const v3UntrackedUsdThreshold = 25000 // Pools need at least 25K USD (untracked) to be selected (for metrics only)
 
-export const v2TrackedEthThreshold = 0.025 // Pairs need at least 0.025 of trackedEth to be selected
+const v2TrackedEthThreshold = 0.025 // Pairs need at least 0.025 of trackedEth to be selected
 const v2UntrackedUsdThreshold = Number.MAX_VALUE // Pairs need at least 1K USD (untracked) to be selected (for metrics only)
 
 export const chainProtocols = [
@@ -297,11 +281,11 @@ export const chainProtocols = [
   {
     protocol: Protocol.V2,
     chainId: ChainId.BASE,
-    timeout: 840000,
+    timeout: 90000,
     provider: new V2SubgraphProvider(
       ChainId.BASE,
-      5,
-      900000,
+      3,
+      90000,
       true,
       1000,
       v2TrackedEthThreshold,
@@ -322,20 +306,6 @@ export const chainProtocols = [
       v2TrackedEthThreshold,
       v2UntrackedUsdThreshold,
       v2SubgraphUrlOverride(ChainId.BLAST)
-    ),
-  },
-  {
-    protocol: Protocol.V4,
-    chainId: ChainId.SEPOLIA,
-    timeout: 90000,
-    provider: new V4SubgraphProvider(
-      ChainId.SEPOLIA,
-      3,
-      90000,
-      true,
-      v4TrackedEthThreshold,
-      v4UntrackedUsdThreshold,
-      v4SubgraphUrlOverride(ChainId.SEPOLIA)
     ),
   },
 ]

@@ -38,9 +38,8 @@ export interface RoutingLambdaStackProps extends cdk.NestedStackProps {
   tokenPropertiesCachingDynamoDb: aws_dynamodb.Table
   rpcProviderHealthStateDynamoDb: aws_dynamodb.Table
   unicornSecret: string
-  uniGraphQLEndpoint: string
-  uniGraphQLHeaderOrigin: string
 }
+
 export class RoutingLambdaStack extends cdk.NestedStack {
   public readonly routingLambda: aws_lambda_nodejs.NodejsFunction
   public readonly routingLambdaAlias: aws_lambda.Alias
@@ -51,6 +50,7 @@ export class RoutingLambdaStack extends cdk.NestedStack {
       poolCacheBucket,
       poolCacheBucket2,
       poolCacheBucket3,
+      poolCacheKey,
       poolCacheGzipKey,
       jsonRpcProviders,
       tokenListCacheBucket,
@@ -70,8 +70,6 @@ export class RoutingLambdaStack extends cdk.NestedStack {
       tokenPropertiesCachingDynamoDb,
       rpcProviderHealthStateDynamoDb,
       unicornSecret,
-      uniGraphQLEndpoint,
-      uniGraphQLHeaderOrigin,
     } = props
 
     new CfnOutput(this, 'jsonRpcProviders', {
@@ -100,8 +98,6 @@ export class RoutingLambdaStack extends cdk.NestedStack {
     tokenPropertiesCachingDynamoDb.grantReadWriteData(lambdaRole)
     rpcProviderHealthStateDynamoDb.grantReadWriteData(lambdaRole)
 
-    const region = cdk.Stack.of(this).region
-
     this.routingLambda = new aws_lambda_nodejs.NodejsFunction(this, 'RoutingLambda2', {
       role: lambdaRole,
       runtime: aws_lambda.Runtime.NODEJS_18_X,
@@ -122,10 +118,12 @@ export class RoutingLambdaStack extends cdk.NestedStack {
 
       description: 'Routing Lambda',
       environment: {
-        VERSION: '26',
+        VERSION: '25',
         NODE_OPTIONS: '--enable-source-maps',
         POOL_CACHE_BUCKET: poolCacheBucket.bucketName,
+        POOL_CACHE_BUCKET_2: poolCacheBucket2.bucketName,
         POOL_CACHE_BUCKET_3: poolCacheBucket3.bucketName,
+        POOL_CACHE_KEY: poolCacheKey,
         POOL_CACHE_GZIP_KEY: poolCacheGzipKey,
         TOKEN_LIST_CACHE_BUCKET: tokenListCacheBucket.bucketName,
         ETH_GAS_STATION_INFO_URL: ethGasStationInfoUrl,
@@ -151,17 +149,9 @@ export class RoutingLambdaStack extends cdk.NestedStack {
         // we will start using the correct ones going forward
         TOKEN_PROPERTIES_CACHING_TABLE_NAME: tokenPropertiesCachingDynamoDb.tableName,
         UNICORN_SECRET: unicornSecret,
-        GQL_URL: uniGraphQLEndpoint,
-        GQL_H_ORGN: uniGraphQLHeaderOrigin,
         ...jsonRpcProviders,
       },
-      layers: [
-        aws_lambda.LayerVersion.fromLayerVersionArn(
-          this,
-          'InsightsLayer',
-          `arn:aws:lambda:${region}:580247275435:layer:LambdaInsightsExtension:14`
-        ),
-      ],
+      layers: [],
       tracing: aws_lambda.Tracing.ACTIVE,
       logRetention: RetentionDays.TWO_WEEKS,
     })

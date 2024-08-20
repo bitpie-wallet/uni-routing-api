@@ -12,99 +12,71 @@ To develop on the Routing API you must have an AWS account where you can deploy 
 
 The best way to develop and test the API is to deploy your own instance to AWS.
 
-1. Install and configure [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) and [AWS CDK V1](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html).
-2. Create .env file in the root directory of the project with :
-   ```
-   THROTTLE_PER_FIVE_MINS = '' # Optional
-   WEB3_RPC_{CHAIN ID} = { RPC Provider}
-   # RPC Providers must be set for the following CHAIN IDs:
-   # MAINNET = 1
-   # ROPSTEN = 3
-   # RINKEBY = 4
-   # GOERLI = 5
-   # KOVAN = 42
-   # OPTIMISM = 10
-   # OPTIMISTIC_KOVAN = 69
-   # ARBITRUM_ONE = 42161
-   # ARBITRUM_RINKEBY = 421611
-   # POLYGON = 137
-   # POLYGON_MUMBAI = 80001
-   # BNB = 56
-   # BASE = 8453
-   # BLAST = 81457
-   # ZORA = 7777777
-   # ZKSYNC = 324
-   TENDERLY_USER = '' # For enabling Tenderly simulations
-   TENDERLY_PROJECT = '' # For enabling Tenderly simulations
-   TENDERLY_ACCESS_KEY = '' # For enabling Tenderly simulations
-   TENDERLY_NODE_API_KEY = '' # For enabling Tenderly node-level RPC access
-   ALCHEMY_QUERY_KEY = '' # For Alchemy subgraph query access
-   GQL_URL = '' # The GraphQL endpoint url, for Uniswap graphql query access
-   GQL_H_ORGN = '' # The GraphQL header origin, for Uniswap graphql query access
-   ```
-3. Install and build the package
-   ```
-   npm install && npm run build
-   ```
-4. To deploy the API run:
-   ```
-   cdk deploy RoutingAPIStack
-   ```
-   This will deploy to the default account your AWS CLI is configured for. Once complete it will output something like:
-   ```
-   RoutingAPIStack.Url = https://...
-   ```
-   You can then try it out:
-   ```
-   curl --request GET '<INSERT_YOUR_URL_HERE>/quote?tokenInAddress=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&tokenInChainId=1&tokenOutAddress=0x1f9840a85d5af5bf1d1762f925bdaddc4201f984&tokenOutChainId=1&amount=100&type=exactIn'
-   ```
+#### 1. Install aws-cdk-local and aws-cdk
 
-### Tenderly Simulation
-
-1. To get a more accurate estimate of the transaction's gas cost, request a tenderly simulation along with the swap. This is done by setting the optional query param "simulateFromAddress". For example:
+Install the required packages globally using npm:
 
 ```
-curl --request GET '<INSERT_YOUR_URL_HERE>/quote?tokenInAddress=<0x...>&simulateFromAddress=<FROM_ADDRESS>&...'
+npm install -g aws-cdk-local aws-cdk
 ```
 
-2. Tenderly simulates the transaction and returns to us the simulated gasLimit as 'gasUseEstimate'. We use this gasLimit to update all our gas estimate heuristics. In the response body, the
+#### 2. Create .env file
+
+Create a `.env` file in the root directory and add the following:
 
 ```
-{'gasUseEstimate':string, 'gasUseEstimateQuote':string, 'quoteGasAdjusted':string, and 'gasUseEstimateUSD':string}
+JSON_RPC_PROVIDER_MAINNET=<your_mainnet_provider_url>
 ```
 
-fields will be updated/calculated using tenderly gasLimit estimate. These fields are already present even without Tenderly simulation, however in that case they are simply heuristics. The Tenderly gas estimates will be more accurate.
+#### 3. Install and build the package
 
-3. If the simulation fails, there will be one more field present in the response body: 'simulationError'. If this field is set and it is set to true, that means the Tenderly Simulation failed. The
+Run the following commands:
 
 ```
-{'gasUseEstimate':string, 'gasUseEstimateQuote':string, 'quoteGasAdjusted':string, and 'gasUseEstimateUSD':string}
+npm install && npm run build
 ```
 
-fields will still be included, however they will be heuristics rather then Tenderly estimates. These heuristic values are not reliable for sending transactions on chain.
+#### 4. Configure AWS environment
 
-### Testing
+Set the following environment variables:
 
-#### Unit Tests
+```
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_DEFAULT_REGION=us-east-2
+export CDK_DEFAULT_ACCOUNT=000000000000
+export CDK_DEFAULT_REGION=us-east-2
+```
 
-Unit tests are invoked by running `npm run test:unit` in the root directory. A 'watch' mode is also supported by running `npm run test:unit:watch`.
+You can verify if the configuration is effective by checking `~/.aws/config`. The content should look like this:
 
-#### Integration Tests
+```
+[profile localstack]
+region = us-east-2
+output = json
+[default]
+region = us-east-2
+output = json
+endpoint_url = http://localhost:4566
+```
 
-Integration tests run against a local DynamoDB node deployed using [dynamodb-local](https://github.com/rynop/dynamodb-local). Note that JDK 8 is a dependency of this package. Invoke the integration tests by running `npm run test:integ` in the root directory.
+#### 5. Bootstrap and deploy to LocalStack
 
-#### End-to-end Tests
+Run the following commands:
 
-The end-to-end tests fetch quotes from your deployed API, then execute the swaps on a Hardhat mainnet fork.
+```
+AWS_PROFILE=localstack cdklocal bootstrap
+AWS_PROFILE=localstack cdklocal deploy RoutingAPIStack
+```
 
-1. First deploy your test API using the instructions above. Then update your `.env` file with the URL of the API, and the RPC URL of an archive node:
+This will deploy to the default account your AWS CLI is configured for. Once complete, it will output something like:
 
-   ```
-   UNISWAP_ROUTING_API='...'
-   ARCHIVE_NODE_RPC='...'
-   ```
+```
+RoutingAPIStack.Url = https://...
+```
 
-2. Run the tests with:
-   ```
-   npm run test:e2e
-   ```
+You can then try it out:
+
+```
+curl --request GET '<INSERT_YOUR_URL_HERE>/quote?tokenInAddress=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&tokenInChainId=1&tokenOutAddress=0x1f9840a85d5af5bf1d1762f925bdaddc4201f984&tokenOutChainId=1&amount=100&type=exactIn'
+```

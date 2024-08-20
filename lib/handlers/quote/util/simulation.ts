@@ -1,35 +1,22 @@
 import { SimulationStatus } from '@uniswap/smart-order-router'
 import Logger from 'bunyan'
 
-export enum RoutingApiSimulationStatus {
-  UNATTEMPTED = 'UNATTEMPTED',
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED',
-  INSUFFICIENT_BALANCE = 'INSUFFICIENT_BALANCE',
-  NOT_SUPPORTED = 'NOT_SUPPORTED',
-  NOT_APPROVED = 'NOT_APPROVED',
-  UNKNOWN = '',
-}
-
-export const simulationStatusTranslation = (
-  simulationStatus: SimulationStatus | undefined,
-  log: Logger
-): RoutingApiSimulationStatus => {
+export const simulationStatusToString = (simulationStatus: SimulationStatus | undefined, log: Logger) => {
   switch (simulationStatus) {
     case undefined:
-      return RoutingApiSimulationStatus.UNATTEMPTED
+      return 'UNATTEMPTED'
     case SimulationStatus.Succeeded:
-      return RoutingApiSimulationStatus.SUCCESS
+      return 'SUCCESS'
     case SimulationStatus.Failed:
-      return RoutingApiSimulationStatus.FAILED
+      return 'FAILED'
     case SimulationStatus.InsufficientBalance:
-      return RoutingApiSimulationStatus.INSUFFICIENT_BALANCE
+      return 'INSUFFICIENT_BALANCE'
     case SimulationStatus.NotSupported:
-      return RoutingApiSimulationStatus.NOT_SUPPORTED
+      return 'NOT_SUPPORTED'
     case SimulationStatus.NotApproved:
-      return RoutingApiSimulationStatus.NOT_APPROVED
+      return 'NOT_APPROVED'
     default:
       log.error(`Unknown simulation status ${simulationStatus}`)
-      return RoutingApiSimulationStatus.UNKNOWN
+      return ''
   }
 }

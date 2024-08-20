@@ -12,8 +12,7 @@ import {
   SwapOptions,
   SwapRoute,
 } from '@uniswap/smart-order-router'
-import { Pool as V3Pool } from '@uniswap/v3-sdk'
-import { Pool as V4Pool } from '@uniswap/v4-sdk'
+import { Pool } from '@uniswap/v3-sdk'
 import JSBI from 'jsbi'
 import _ from 'lodash'
 import { APIGLambdaHandler, ErrorResponse, HandleRequestParams, Response } from '../handler'
@@ -26,7 +25,7 @@ import {
   QUOTE_SPEED_CONFIG,
 } from '../shared'
 import { QuoteQueryParams, QuoteQueryParamsJoi, TradeTypeParam } from './schema/quote-schema'
-import { simulationStatusTranslation } from './util/simulation'
+import { simulationStatusToString } from './util/simulation'
 import Logger from 'bunyan'
 import { PAIRS_TO_TRACK } from './util/pairs-to-track'
 import { measureDistributionPercentChangeImpact } from '../../util/alpha-config-measurement'
@@ -34,8 +33,7 @@ import { MetricsLogger } from 'aws-embedded-metrics'
 import { CurrencyLookup } from '../CurrencyLookup'
 import { SwapOptionsFactory } from './SwapOptionsFactory'
 import { GlobalRpcProviders } from '../../rpc/GlobalRpcProviders'
-import { adhocCorrectGasUsed } from '../../util/estimateGasUsed'
-import { adhocCorrectGasUsedUSD } from '../../util/estimateGasUsedUSD'
+import semver from 'semver'
 import { Pair } from '@uniswap/v2-sdk'
 
 export class QuoteHandler extends APIGLambdaHandler<
@@ -108,8 +106,7 @@ export class QuoteHandler extends APIGLambdaHandler<
               errorCode: result?.errorCode,
               detail: result?.detail,
             },
-            `Quote 4XX Error [${result?.statusCode}] on ${ID_TO_NETWORK_NAME(chainId)} with errorCode '${
-              result?.errorCode
+            `Quote 4XX Error [${result?.statusCode}] on ${ID_TO_NETWORK_NAME(chainId)} with errorCode '${result?.errorCode
             }': ${result?.detail}`
           )
           break
@@ -128,16 +125,6 @@ export class QuoteHandler extends APIGLambdaHandler<
             1,
             MetricLoggerUnit.Count
           )
-          log.error(
-            {
-              statusCode: result?.statusCode,
-              errorCode: result?.errorCode,
-              detail: result?.detail,
-            },
-            `Quote 5XX Error [${result?.statusCode}] on ${ID_TO_NETWORK_NAME(chainId)} with errorCode '${
-              result?.errorCode
-            }': ${result?.detail}`
-          )
           break
       }
     } catch (err) {
@@ -151,8 +138,6 @@ export class QuoteHandler extends APIGLambdaHandler<
         1,
         MetricLoggerUnit.Count
       )
-
-      log.error(`Quote 5XX Error on ${ID_TO_NETWORK_NAME(chainId)} with exception '${err}'`)
 
       throw err
     } finally {
@@ -260,7 +245,13 @@ export class QuoteHandler extends APIGLambdaHandler<
     }
 
     const requestSource = requestSourceHeader ?? params.requestQueryParams.source ?? ''
-    const protocols = QuoteHandler.protocolsFromRequest(chainId, protocolsStr, forceCrossProtocol)
+    const protocols = QuoteHandler.protocolsFromRequest(
+      chainId,
+      protocolsStr,
+      requestSource,
+      appVersion,
+      forceCrossProtocol
+    )
 
     if (protocols === undefined) {
       return {
@@ -390,8 +381,7 @@ export class QuoteHandler extends APIGLambdaHandler<
             intent,
             gasToken,
           },
-          `Exact In Swap: Give ${amount.toExact()} ${amount.currency.symbol}, Want: ${
-            currencyOut.symbol
+          `Exact In Swap: Give ${amount.toExact()} ${amount.currency.symbol}, Want: ${currencyOut.symbol
           }. Chain: ${chainId}`
         )
 
@@ -416,8 +406,7 @@ export class QuoteHandler extends APIGLambdaHandler<
             swapParams,
             gasToken,
           },
-          `Exact Out Swap: Want ${amount.toExact()} ${amount.currency.symbol} Give: ${
-            currencyIn.symbol
+          `Exact Out Swap: Want ${amount.toExact()} ${amount.currency.symbol} Give: ${currencyIn.symbol
           }. Chain: ${chainId}`
         )
 
@@ -450,9 +439,9 @@ export class QuoteHandler extends APIGLambdaHandler<
       quoteGasAdjusted,
       quoteGasAndPortionAdjusted,
       route,
-      estimatedGasUsed: preProcessedEstimatedGasUsed,
+      estimatedGasUsed,
       estimatedGasUsedQuoteToken,
-      estimatedGasUsedUSD: preProcessedEstimatedGasUsedUSD,
+      estimatedGasUsedUSD,
       estimatedGasUsedGasToken,
       gasPriceWei,
       methodParameters,
@@ -461,14 +450,6 @@ export class QuoteHandler extends APIGLambdaHandler<
       hitsCachedRoute,
       portionAmount: outputPortionAmount, // TODO: name it back to portionAmount
     } = swapRoute
-
-    const estimatedGasUsed = adhocCorrectGasUsed(preProcessedEstimatedGasUsed, chainId, requestSource)
-    const estimatedGasUsedUSD = adhocCorrectGasUsedUSD(
-      preProcessedEstimatedGasUsed,
-      preProcessedEstimatedGasUsedUSD,
-      chainId,
-      requestSource
-    )
 
     if (simulationStatus == SimulationStatus.Failed) {
       metric.putMetric('SimulationFailed', 1, MetricLoggerUnit.Count)
@@ -504,23 +485,20 @@ export class QuoteHandler extends APIGLambdaHandler<
           edgeAmountOut = type == 'exactIn' ? quote.quotient.toString() : amount.quotient.toString()
         }
 
-        if (nextPool instanceof V4Pool) {
-          // TODO - ROUTE-220: Support V4 Pool
-          throw new Error(`V4 pools are not supported in quote response deserialization ${JSON.stringify(nextPool)}`)
-        } else if (nextPool instanceof V3Pool) {
+        if (nextPool instanceof Pool) {
           curRoute.push({
             type: 'v3-pool',
             address: v3PoolProvider.getPoolAddress(nextPool.token0, nextPool.token1, nextPool.fee).poolAddress,
             tokenIn: {
               chainId: tokenIn.chainId,
               decimals: tokenIn.decimals.toString(),
-              address: tokenIn.wrapped.address,
+              address: tokenIn.address,
               symbol: tokenIn.symbol!,
             },
             tokenOut: {
               chainId: tokenOut.chainId,
               decimals: tokenOut.decimals.toString(),
-              address: tokenOut.wrapped.address,
+              address: tokenOut.address,
               symbol: tokenOut.symbol!,
             },
             fee: nextPool.fee.toString(),
@@ -530,17 +508,17 @@ export class QuoteHandler extends APIGLambdaHandler<
             amountIn: edgeAmountIn,
             amountOut: edgeAmountOut,
           })
-        } else if (nextPool instanceof Pair) {
-          const reserve0 = nextPool.reserve0
-          const reserve1 = nextPool.reserve1
+        } else {
+          const reserve0 = (nextPool as Pair).reserve0
+          const reserve1 = (nextPool as Pair).reserve1
 
           curRoute.push({
             type: 'v2-pool',
-            address: v2PoolProvider.getPoolAddress(nextPool.token0, nextPool.token1).poolAddress,
+            address: v2PoolProvider.getPoolAddress((nextPool as Pair).token0, (nextPool as Pair).token1).poolAddress,
             tokenIn: {
               chainId: tokenIn.chainId,
               decimals: tokenIn.decimals.toString(),
-              address: tokenIn.wrapped.address,
+              address: tokenIn.address,
               symbol: tokenIn.symbol!,
               buyFeeBps: this.deriveBuyFeeBps(tokenIn, reserve0, reserve1, enableFeeOnTransferFeeFetching),
               sellFeeBps: this.deriveSellFeeBps(tokenIn, reserve0, reserve1, enableFeeOnTransferFeeFetching),
@@ -548,7 +526,7 @@ export class QuoteHandler extends APIGLambdaHandler<
             tokenOut: {
               chainId: tokenOut.chainId,
               decimals: tokenOut.decimals.toString(),
-              address: tokenOut.wrapped.address,
+              address: tokenOut.address,
               symbol: tokenOut.symbol!,
               buyFeeBps: this.deriveBuyFeeBps(tokenOut, reserve0, reserve1, enableFeeOnTransferFeeFetching),
               sellFeeBps: this.deriveSellFeeBps(tokenOut, reserve0, reserve1, enableFeeOnTransferFeeFetching),
@@ -598,8 +576,6 @@ export class QuoteHandler extends APIGLambdaHandler<
             amountIn: edgeAmountIn,
             amountOut: edgeAmountOut,
           })
-        } else {
-          throw new Error(`Unsupported pool type ${JSON.stringify(nextPool)}`)
         }
       }
 
@@ -625,7 +601,7 @@ export class QuoteHandler extends APIGLambdaHandler<
       gasUseEstimateGasTokenDecimals: estimatedGasUsedGasToken?.toExact(),
       gasUseEstimate: estimatedGasUsed.toString(),
       gasUseEstimateUSD: estimatedGasUsedUSD.toExact(),
-      simulationStatus: simulationStatusTranslation(simulationStatus, log),
+      simulationStatus: simulationStatusToString(simulationStatus, log),
       simulationError: simulationStatus == SimulationStatus.Failed,
       gasPriceWei: gasPriceWei.toString(),
       route: routeResponse,
@@ -662,9 +638,15 @@ export class QuoteHandler extends APIGLambdaHandler<
   static protocolsFromRequest(
     chainId: ChainId,
     requestedProtocols: string[] | string | undefined,
+    requestSource: string,
+    appVersion: string | undefined,
     forceCrossProtocol: boolean | undefined
   ): Protocol[] | undefined {
-    const excludeV2 = false
+    const isMobileRequest = ['uniswap-ios', 'uniswap-android'].includes(requestSource)
+    // We will exclude V2 if isMobile and the appVersion is not present or is lower than 1.24
+    const semverAppVersion = semver.coerce(appVersion)
+    const fixVersion = semver.coerce('1.24')!
+    const excludeV2 = isMobileRequest && (semverAppVersion === null || semver.lt(semverAppVersion, fixVersion))
 
     if (requestedProtocols) {
       let protocols: Protocol[] = []
@@ -769,8 +751,8 @@ export class QuoteHandler extends APIGLambdaHandler<
       const metricPair = pairsTracked?.includes(tradingPair)
         ? tradingPair
         : pairsTracked?.includes(wildcardInPair)
-        ? wildcardInPair
-        : wildcardOutPair
+          ? wildcardInPair
+          : wildcardOutPair
 
       metric.putMetric(
         `GET_QUOTE_AMOUNT_${metricPair}_${tradeType.toUpperCase()}_CHAIN_${chainId}`,

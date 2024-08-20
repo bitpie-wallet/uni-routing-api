@@ -92,11 +92,6 @@ export const OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol: string]: { [cha
       gasLimitPerCall: 75_000,
       quoteMinSuccessRate: 0.15,
     },
-    [ChainId.ZKSYNC]: {
-      multicallChunk: 20,
-      gasLimitPerCall: 4_000_000,
-      quoteMinSuccessRate: 0.1,
-    },
   },
   [Protocol.MIXED]: {
     ...constructSameBatchParamsMap(DEFAULT_BATCH_PARAMS),
@@ -139,11 +134,6 @@ export const OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol: string]: { [cha
       multicallChunk: 1850,
       gasLimitPerCall: 80_000,
       quoteMinSuccessRate: 0.15,
-    },
-    [ChainId.ZKSYNC]: {
-      multicallChunk: 20,
-      gasLimitPerCall: 4_000_000,
-      quoteMinSuccessRate: 0.1,
     },
   },
 }
@@ -196,11 +186,6 @@ export const NON_OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol: string]: { 
       gasLimitPerCall: 150_000,
       quoteMinSuccessRate: 0.15,
     },
-    [ChainId.ZKSYNC]: {
-      multicallChunk: 20,
-      gasLimitPerCall: 4_000_000,
-      quoteMinSuccessRate: 0.1,
-    },
   },
   [Protocol.MIXED]: {
     ...constructSameBatchParamsMap(DEFAULT_BATCH_PARAMS),
@@ -244,11 +229,6 @@ export const NON_OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol: string]: { 
       gasLimitPerCall: 150_000,
       quoteMinSuccessRate: 0.15,
     },
-    [ChainId.ZKSYNC]: {
-      multicallChunk: 20,
-      gasLimitPerCall: 4_000_000,
-      quoteMinSuccessRate: 0.1,
-    },
   },
 }
 
@@ -274,10 +254,6 @@ export const GAS_ERROR_FAILURE_OVERRIDES: { [chainId: number]: FailureOverrides 
     gasLimitOverride: 3_000_000,
     multicallChunk: 45,
   },
-  [ChainId.ZKSYNC]: {
-    gasLimitOverride: 6_000_000,
-    multicallChunk: 10,
-  },
 }
 
 export const SUCCESS_RATE_FAILURE_OVERRIDES: { [chainId: number]: FailureOverrides } = {
@@ -301,10 +277,6 @@ export const SUCCESS_RATE_FAILURE_OVERRIDES: { [chainId: number]: FailureOverrid
   [ChainId.BLAST]: {
     gasLimitOverride: 3_000_000,
     multicallChunk: 45,
-  },
-  [ChainId.ZKSYNC]: {
-    gasLimitOverride: 6_000_000,
-    multicallChunk: 10,
   },
 }
 

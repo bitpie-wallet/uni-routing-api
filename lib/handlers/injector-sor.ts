@@ -71,9 +71,6 @@ import { v4 } from 'uuid/index'
 import { chainProtocols } from '../cron/cache-config'
 import { Protocol } from '@uniswap/router-sdk'
 import { UniJsonRpcProvider } from '../rpc/UniJsonRpcProvider'
-import { GraphQLTokenFeeFetcher } from '../graphql/graphql-token-fee-fetcher'
-import { UniGraphQLProvider } from '../graphql/graphql-provider'
-import { TrafficSwitcherITokenFeeFetcher } from '../util/traffic-switch/traffic-switcher-i-token-fee-fetcher'
 
 export const SUPPORTED_CHAINS: ChainId[] = [
   ChainId.MAINNET,
@@ -150,7 +147,9 @@ export abstract class InjectorSOR<Router, QueryParams> extends Injector<
 
     try {
       const {
+        POOL_CACHE_BUCKET_2,
         POOL_CACHE_BUCKET_3,
+        POOL_CACHE_KEY,
         POOL_CACHE_GZIP_KEY,
         TOKEN_LIST_CACHE_BUCKET,
         ROUTES_TABLE_NAME,
@@ -234,23 +233,7 @@ export abstract class InjectorSOR<Router, QueryParams> extends Injector<
             sourceOfTruthPoolProvider: noCacheV3PoolProvider,
           })
 
-          const onChainTokenFeeFetcher = new OnChainTokenFeeFetcher(chainId, provider)
-          const graphQLTokenFeeFetcher = new GraphQLTokenFeeFetcher(
-            new UniGraphQLProvider(),
-            onChainTokenFeeFetcher,
-            chainId
-          )
-          const trafficSwitcherTokenFetcher = new TrafficSwitcherITokenFeeFetcher('TokenFetcherExperimentV2', {
-            control: graphQLTokenFeeFetcher,
-            treatment: onChainTokenFeeFetcher,
-            aliasControl: 'graphQLTokenFeeFetcher',
-            aliasTreatment: 'onChainTokenFeeFetcher',
-            customization: {
-              pctEnabled: 0.0,
-              pctShadowSampling: 0.005,
-            },
-          })
-
+          const tokenFeeFetcher = new OnChainTokenFeeFetcher(chainId, provider)
           const tokenValidatorProvider = new TokenValidatorProvider(
             chainId,
             multicall2Provider,
@@ -259,7 +242,7 @@ export abstract class InjectorSOR<Router, QueryParams> extends Injector<
           const tokenPropertiesProvider = new TokenPropertiesProvider(
             chainId,
             new NodeJSCache(new NodeCache({ stdTTL: 30000, useClones: false })),
-            trafficSwitcherTokenFetcher
+            tokenFeeFetcher
           )
           const underlyingV2PoolProvider = new V2PoolProvider(chainId, multicall2Provider, tokenPropertiesProvider)
           const v2PoolProvider = new CachingV2PoolProvider(
@@ -282,7 +265,19 @@ export abstract class InjectorSOR<Router, QueryParams> extends Injector<
                     throw new Error(`Chain protocol not found for chain ${chainId} and protocol ${Protocol.V3}`)
                   }
 
-                  return await V3AWSSubgraphProvider.EagerBuild(POOL_CACHE_BUCKET_3!, POOL_CACHE_GZIP_KEY!, chainId)
+                  const subgraphProvider = await V3AWSSubgraphProvider.EagerBuild(
+                    POOL_CACHE_BUCKET_3!,
+                    POOL_CACHE_GZIP_KEY!,
+                    chainId
+                  ).catch(async (err) => {
+                    log.error(
+                      { err },
+                      'compressed s3 subgraph pool caching unavailable, fall back to the existing s3 subgraph pool caching'
+                    )
+
+                    return await V3AWSSubgraphProvider.EagerBuild(POOL_CACHE_BUCKET_2!, POOL_CACHE_KEY!, chainId)
+                  })
+                  return subgraphProvider
                 } catch (err) {
                   log.error({ err }, 'AWS Subgraph Provider unavailable, defaulting to Static Subgraph Provider')
                   return new StaticV3SubgraphProvider(chainId, v3PoolProvider)
@@ -298,7 +293,19 @@ export abstract class InjectorSOR<Router, QueryParams> extends Injector<
                     throw new Error(`Chain protocol not found for chain ${chainId} and protocol ${Protocol.V2}`)
                   }
 
-                  return await V2AWSSubgraphProvider.EagerBuild(POOL_CACHE_BUCKET_3!, POOL_CACHE_GZIP_KEY!, chainId)
+                  const subgraphProvider = await V2AWSSubgraphProvider.EagerBuild(
+                    POOL_CACHE_BUCKET_3!,
+                    POOL_CACHE_GZIP_KEY!,
+                    chainId
+                  ).catch(async (err) => {
+                    log.error(
+                      { err },
+                      'compressed s3 subgraph pool caching unavailable, fall back to the existing s3 subgraph pool caching'
+                    )
+
+                    return await V2AWSSubgraphProvider.EagerBuild(POOL_CACHE_BUCKET_2!, POOL_CACHE_KEY!, chainId)
+                  })
+                  return subgraphProvider
                 } catch (err) {
                   return new StaticV2SubgraphProvider(chainId)
                 }
@@ -328,7 +335,6 @@ export abstract class InjectorSOR<Router, QueryParams> extends Injector<
             case ChainId.AVALANCHE:
             case ChainId.BLAST:
             case ChainId.ZORA:
-            case ChainId.ZKSYNC:
               const currentQuoteProvider = new OnChainQuoteProvider(
                 chainId,
                 provider,
@@ -391,7 +397,7 @@ export abstract class InjectorSOR<Router, QueryParams> extends Injector<
             undefined,
             // The timeout for the underlying axios call to Tenderly, measured in milliseconds.
             2.5 * 1000,
-            100,
+            20,
             [ChainId.MAINNET]
           )
 

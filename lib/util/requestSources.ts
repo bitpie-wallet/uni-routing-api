@@ -6,5 +6,4 @@ export const REQUEST_SOURCES = [
   'uniswap-web',
   'external-api',
   'routing-api',
-  'uniswap-extension',
 ]
